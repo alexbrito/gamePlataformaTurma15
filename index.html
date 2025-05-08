@@ -698,6 +698,9 @@
 
         function gameOver(p_victory) {
             let colors = p_victory ? ["#00FF00", "#FFFFFF"] : ["#FF0000", "#FFFFFF"];
+
+            if (p_victory)
+                score = score + 500;
             let i = 0;
 
             gameIsRunning = false;
