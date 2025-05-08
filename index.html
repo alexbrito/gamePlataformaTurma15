@@ -1,0 +1,775 @@
+﻿<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jogo de Plataforma</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: auto; /* Permitir scroll para ver o menu e o jogo */
+            background-color: #87CEEB;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        #menuFases {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin-bottom: 20px;
+            padding: 20px;
+            background-color: #f0f0f0;
+            border-radius: 8px;
+        }
+
+        .fase-thumbnail {
+            width: 450px;
+            height:240px;
+            margin: 10px;
+            border: 2px solid #ccc;
+            cursor: pointer;
+            background-size: cover;
+            background-position: center;
+            align-content: flex-start;
+            justify-content: center;
+            align-items: center;
+            font-size: 36px;
+            color: #333;
+            text-align: center;
+            vertical-align: bottom;
+        }
+
+        #gameCanvas {
+            display: none; /* Inicialmente escondido */
+            background-color: #5C94FC;
+            height: 1080;
+        }
+
+        #faseImagem {
+            max-width: 80%;
+            height: auto;
+            margin-top: 10px;
+            border: 1px solid #ccc;
+            display: none; /* Inicialmente escondida */
+        }
+
+        #voltarButton {
+            padding: 10px 20px;
+            margin-top: 20px;
+            cursor: pointer;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            display: none; /* Inicialmente escondido */
+        }
+
+        #rankingIcon {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            width: 30px;
+            height: 30px;
+            background-color: lightgray; /* Cor de fundo para o ícone */
+            border-radius: 50%;
+            text-align: center;
+            line-height: 30px;
+            font-size: 18px;
+            cursor: pointer;
+            z-index: 10; /* Para ficar acima do canvas */
+        }
+    </style>
+</head>
+<body>
+    <!--<div id="rankingIcon" title="Ver Ranking">🏆</div>-->
+    <div id="menuFases">
+    </div>
+    <canvas id="gameCanvas"></canvas>
+    <img id="faseImagem" src="" alt="Imagem da Fase">
+    <button id="voltarButton">Voltar</button>
+
+    <script>
+        // Configurações básicas
+        var gameIsRunning = false; // Jogo começa parado no menu
+        let score = 0; // Pontuação inicial
+        let ranking = []; // Array para armazenar os placares
+        const maxRankingSize = 10;
+        loadRankingFromCookie();
+
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+        const menuFasesDiv = document.getElementById("menuFases");
+        const faseImagemElement = document.getElementById("faseImagem");
+        const voltarButton = document.getElementById("voltarButton");
+
+        const blockSize = 50;  // Tamanho de cada bloco do jogo
+        const gravity = 0.4;    // Gravidade do jogo
+
+        let timer = 150;
+        let currentLevel; // Para armazenar a fase atual
+        let currentLevelImage; // Para armazenar o caminho da imagem da fase atual
+
+        const levels = [
+            {
+                name: "Fase Original",
+                data: [
+                    "======================================",
+                    "=0X     @0    0000       =0000=",
+                    "=0-   @  @@@@   -- 0     =0==0=",
+                    "=0=       =  =   -- =   @@@=00 0=",
+                    "=0=         =     00   @@@@ =0=#0=",
+                    "=-=0-0-0   00 = --     000@000000=",
+                    "=##-=-=0   --  -- 0   ---- =======",
+                    "=00000=-     == = -- #   00000  @@ =",
+                    "=0======00###000 #---   ----- --@@@=",
+                    "=0=0=0==0-----00 -000-   0     ##0  =",
+                    "=000000000---000-00 0-   -     00=-  =",
+                    "=============0=-000#0=--------------0=",
+                    "======#0000000=-==0#0=--------------0=",
+                    "======#0==0====-000#0=--------------0=",
+                    "======#00=0000=0000000=======---00#00=",
+                    "=000==#==0=====0=====0=   ======0##-0=",
+                    "=0=00           0000000 = ======0===0=",
+                    "=$=======0===============         0=",
+                    "======================================"
+                ],
+                image: "fase_original.jpg"
+            },
+            {
+                name: "Alice Peixoto e Bento Serrano",
+                data: [
+                    "======================================",
+                    "=# #             #   -               =",
+                    "=0#      0       # -------           =",
+                    "=0     0--0       00000000 -         =",
+                    "=0--000-  00===-==========0          =",
+                    "=0-0#       -    #       =0          =",
+                    "=0-#0#####- -    #        =0         =",
+                    "=0- #    000-    #     0   =0        =",
+                    "=0- #####000-          =    =0       =",
+                    "=0- 000000-0-        0       =0      =",
+                    "=0- #####000-        =        =0     =",
+                    "=0-               0            =0    =",
+                    "=0-=-     =====  0=             =00  =",
+                    "=0- -     =     0-               ==  =",
+                    "=0---     =     -0                 = =",
+                    "=0#   ==  =   -  -0               ==$=",
+                    "=0#  =       --   -0             === =",
+                    "=X000###-------                 ==== =",
+                    "======================================"
+                ],
+                image: "AliceP_BentoS.jpg"
+            },
+            {
+                name: "Sophia e Daniela",
+                data: [
+                    "======================================",
+                    "=       =    0 @ 0  =   0@  ==       =",
+                    "=         ===0@@@0  =  0@@  ==     0$=",
+                    "=     ===== #@@@@@  =  @@@@       0@@=",
+                    "=    0=     #       =          ==0@@@=",
+                    "=  = 0=     #       =        = =00###=",
+                    "=    0=  =##0         =    = ===0=====",
+                    "= X000=     0         =   ======0=====",
+                    "=======     0         =  ====0000=====",
+                    "======0     0       ===  ===00========",
+                    "======00    0     ===  00===0=========",
+                    "=======0    0  == =   0  =000=========",
+                    "=======000 0  ===   000  =0===========",
+                    "======= ----- ====-----##=============",
+                    "=======  ---  =====---####============",
+                    "=======  ---#####==---####============",
+                    "=======  ---#####==---####============",
+                    "=---------------------####-----------=",
+                    "======================================"
+                ],
+                image: "Sophia_Daniela.jpg"
+            },
+            {
+                name: "Heloisa e Bernardo",
+                data: [
+                    "======================================",
+                    "=            @@@@@           @@@@@   =",
+                    "=           @@@@@@@          @@@@@   =",
+                    "=    @@@@@@@@@@@@@           @@@@@   =",
+                    "=    @@@@@@@@                @@@@@   =",
+                    "=    @@@@@@@@      000               =",
+                    "=    @@@@@@@@     0=#0           0000=",
+                    "=                0==#0          0===0=",
+                    "=            0000===#000000000000=  0=",
+                    "=         000=====================  0=",
+                    "=        0====                      0=",
+                    "= X     0=====            #        00=",
+                    "=----- 0==                #        0==",
+                    "= --- 0===                #  000000= =",
+                    "= ---=====        00000000#  0========",
+                    "=====0000000     0=======00000=      =",
+                    "=00   000==0000000=      ======      =",
+                    "=$0000#  ==========##                =",
+                    "======================================"
+                ],
+                image: "Heloisa_Bernardo.jpg"
+            },
+            {
+                name: "Manuela e Valentina",
+                data: [
+                    "======================================",
+                    "=    =     @@@ -                 0  X=",
+                    "= #= =     @   -             0---=====",
+                    "= == =         -              ---    =",
+                    "=                             -      =",
+                    "======@@@   000000            -      =",
+                    "=      @      ====      0##000-   ---=",
+                    "=     @@@#    =  =   === -------  -0-=",
+                    "=    @@@@#    =  =   === -=0=    0- -=",
+                    "=-- @@@@@#-   =  =   === -=0=   0    =",
+                    "= -@@ -  #--  =  =   === -=0=        =",
+                    "= 0   -  #--- =  =   ======0=        =",
+                    "= 0   -  #----=  =   ======0=  0  0  =",
+                    "= 0   -  ======  =0  0     0=        =",
+                    "= 0   -          =000#000000= 0 0    =",
+                    "= 0   -   0      ============        =",
+                    "= 0   -0                    =        =",
+                    "=$=============== ====================",
+                    "======================================"
+                ],
+                image: "Manuela_Valentina.jpg"
+            },
+            {
+                name: "Isabela e Luiza Corteletti",
+                data: [
+                    "======================================",
+                    "    0       000 0                   X=",
+                    "   0@0      @@@@@   0        00     -=",
+                    "   @ @  #   @@@@@   00 0 00 0 --   - =",
+                    "        #            0  0= 0   -  -  =",
+                    "                               =--=  =",
+                    "                   # ===== 000 -==== =",
+                    "  ##            = -#      0===-  =   =",
+                    "- -# @ 0       =  -        0  # #= =$=",
+                    " --    0      =         ##00  # #  ===",
+                    "  =    00          00    #0        ##=",
+                    "   =        #    00  0      -     -- =",
+                    "  ==        #     0        -     --- =",
+                    "   = 0 0    #      #   0  -      0   =",
+                    "0   = 0     #      #  0      =  00  -=",
+                    "0           ######   0  0    =      -=",
+                    "0        -            00     ==     -=",
+                    "000      -                          -=",
+                    "======================================"
+                ],
+                image: "Isabela_Luiza.jpg"
+            },
+            {
+                name: "Lia e Clara",
+                data: [
+                    "======================================",
+                    "======== -$-  ######-----------   0X0=",
+                    "=                  ------------  0 00=",
+                    "=--        0 @@    ------------ 0  0 =",
+                    "=--        0@@@@               0   0 =",
+                    "=--       -0   0000 0         0@@  0 =",
+                    "=--    000 0  0     000      0@@@@ 0 =",
+                    "=--   00 0   0  = ===00000  0      0-=",
+                    "=--   0  0 0=========0   000        -=",
+                    "=--   0  0 0=========0-  ####     0 -=",
+                    "=--  000 @@ =========0        0000  -=",
+                    "=    0 0@@@@==-=====-       @@00    -=",
+                    "= 0  0 0  0#==-=###-   =   @@@@0000 -=",
+                    "= 0  0  00 #==--###-           @@   -=",
+                    "= 00 0  ======-----           @@@@ 0-=",
+                    "= 00 0  ========== --          ####0 =",
+                    "= 00 0      ===  =-                ##=",
+                    "= 0000      ===# =                 ##=",
+                    "======================================"
+                ],
+                image: "Lia_Clara.jpg"
+            },
+            {
+                name: "Miguel e Pedro Bonfim",
+                data: [
+                    "======================================",
+                    "=                                    =",
+                    "=                                    =",
+                    "=           @                        =",
+                    "=          @@@         @             =",
+                    "=  @        @        -               =",
+                    "=  @              ----               =",
+                    "=  @              -##----------------=",
+                    "=          ----====                  =",
+                    "=           -- 00000---------------  =",
+                    "=           --    ==========-     == =",
+                    "=        ----- ---=========#-#    =00=",
+                    "=   ------##   -#-=========#-#   ==00=",
+                    "=   -        ---#-----=====#---- 000-=",
+                    "=   - ----------    $-===---     ===-=",
+                    "=   -0000------- #----===-    -----=-=",
+                    "= @ -0000------- #=======- ----###---=",
+                    "=   -0000        #=======- X- -----===",
+                    "======================================"
+                ],
+                image: "Miguel_PedroBonfim.jpg"
+            },
+            {
+                name: "Natan e Larissa",
+                data: [
+                    "======================================",
+                    "=                   #            #000=",
+                    "=   0   ======      #####-0   == #000=",
+                    "=   @   =    =====      $-@@   =  000=",
+                    "=       =000 0000=@@@-----@@    #####=",
+                    "=       ==== ===== @ -    @@         =",
+                    "=                    -         @     =",
+                    "=       ==   ========= ======= @   @ =",
+                    "=--- ====    =00000    =00000        =",
+                    "= -  = ==    =00000    =0==== -      =",
+                    "= -  = 000=  =0====    =0000=        =",
+                    "=     =0===  =0==0=   #======        =",
+                    "=     =000= -=0==0=   #        ## -  =",
+                    "=     ===== -=0000= - ----------     =",
+                    "===          ====== -   ---------    =",
+                    "===        -  ===== -            -   =",
+                    "===                 -             -  =",
+                    "===         X       -----------------=",
+                    "======================================"
+                ],
+                image: "Natan_Larissa.jpg"
+            },
+            {
+                name: "Lara e Luiza Rosa",
+                data: [
+                    "======================================",
+                    "=     0                       0000   =",
+                    "=X 000 0                      ####   =",
+                    "==##=#@ 0                     ====   =",
+                    "=  ##@@  0                    ====   =",
+                    "=  #@@@@# 0      00000        ====   =",
+                    "=  ##@@  # 0    0=====0       ====   =",
+                    "=  ##     @ 0  0=     =0             =",
+                    "=  ##    @@  00=       =             =",
+                    "=  ##   @@@@##=                      =",
+                    "=  ##    @@                        0$=",
+                    "=  ##                  0  0 0     0===",
+                    "=  ##              0000=  = =    0====",
+                    "=  ######   @      =====  = =   0=====",
+                    "=  ## 0    @@   000=      =#=  0======",
+                    "=  ###### @@@@  ====      === 0=======",
+                    "=  ####### @@              =  ========",
+                    "=------------------------------------=",
+                    "======================================"
+                ],
+                image: "Lara_LuizaRosa.jpg"
+            },
+            {
+                name: "Luísa e Olívia",
+                data: [
+                    "======================================",
+                    "=X000        0000  @         ## ###0$=",
+                    "====0000000000##00 @  @        000000=",
+                    "=--=    00===    0 @@@@@@@@ @  0======",
+                    "= -=    00=-----=0     @@@@ 0  0 =   =",
+                    "= -=====00=-  --=000   @@@@00  0 =   =",
+                    "= --=--====-  -===0      -0 0- 0 =   =",
+                    "=  -=--=----  ---=00      000= 0 =   =",
+                    "=  -====-      --==0      0=0  0 =   =",
+                    "=  -----       --=0     - 0=0  0 =   =",
+                    "=              -#=0 000   0=0  0 =   =",
+                    "=             -##=0 0=0 000=0==0 === =",
+                    "=   @@        -===0 0=0 0#0=0  0     =",
+                    "=   @@@   @@  -=00000=000# = 0 0     =",
+                    "=       @@@@  -============= 0 0     =",
+                    "=       @@@@            000000 0     =",
+                    "=                   ##  0     00     =",
+                    "=                       0000000      =",
+                    "======================================"
+                ],
+                image: "Luisa_Olivia.jpg"
+            },
+        ];
+        
+        // Inicializa o menu de fases
+        function initializeMenu() {
+            menuFasesDiv.innerHTML = "";
+            levels.forEach((level, index) => {
+                const thumbnail = document.createElement("div");
+                thumbnail.classList.add("fase-thumbnail");
+                thumbnail.textContent = level.name;
+                thumbnail.style.backgroundImage = `url('imagens/${level.image}')`;
+                thumbnail.addEventListener("click", () => loadLevel(index));
+                menuFasesDiv.appendChild(thumbnail);
+            });
+
+            canvas.style.display = "none";
+            faseImagemElement.style.display = "none";
+            voltarButton.style.display = "none";
+            menuFasesDiv.style.display = "flex";
+            document.body.style.overflow = "auto"; // Permite scroll no menu
+            gameIsRunning = false;
+        }
+
+        // Carrega a fase selecionada
+        function loadLevel(levelIndex) {
+            if (levelIndex >= 0 && levelIndex < levels.length) {
+                currentLevel = levels[levelIndex];
+                generateLevel(currentLevel.data);
+                faseImagemElement.src = 'imagens/' + currentLevel.image;
+                restartGame(); // Inicia o jogo com a nova fase
+            }
+        }
+
+        // Constrói o cenário a partir da string
+        function generateLevel(levelData) {
+            gameIsRunning = true;
+            score = 0;
+
+            canvas.style.display = "block";
+            faseImagemElement.style.display = "block";
+            voltarButton.style.display = "block";
+            menuFasesDiv.style.display = "none";
+            document.body.style.overflow = "hidden"; // Esconde o scroll do menu
+
+            canvas.width = window.innerWidth;
+            canvas.height = 950;//window.innerHeight;
+            canvas.style.backgroundColor = "#87CEEB";
+
+            platforms = [];
+            nuvens = [];
+            obstacles = [];
+            treasure = null;
+            coins = [];
+
+            for (let row = 0; row < levelData.length; row++) {
+                for (let col = 0; col < levelData[row].length; col++) {
+                    let char = levelData[row][col];
+                    let x = col * blockSize;
+                    let y = row * blockSize;
+
+                    if (char === "=") {
+                        platforms.push({ x, y, width: blockSize, height: blockSize, color: "#8B4513" });
+                    } else if (char === "-") {
+                        platforms.push({ x, y, width: blockSize, height: blockSize, color: "green" });
+                    } else if (char === "@") {
+                        nuvens.push({ x, y, width: blockSize, height: blockSize });
+                    } else if (char === "#") {
+                        obstacles.push({ x, y, width: blockSize, height: blockSize });
+                    } else if (char === "0") {
+                        const coinWidth = blockSize * .3;
+                        const coinHeight = blockSize * .3;
+                        const offsetX = ((blockSize - coinWidth) / 3) * 1.5;
+                        const offsetY = ((blockSize - coinHeight) / 3) * 2;
+                        coins.push({
+                            x: x + offsetX,
+                            y: y + offsetY,
+                            width: coinWidth,
+                            height: coinHeight
+                        });
+                    } else if (char === "$") {
+                        treasure = { x, y, width: blockSize, height: blockSize };
+                        treasures.push({ x, y, width: blockSize, height: blockSize });
+                    } else if (char === "X") {
+                        player.x = x;
+                        player.y = y - player.height + blockSize;
+                    }
+                }
+            }
+        }
+
+        // Estrutura de jogo
+        let player = {
+            x: 100,
+            y: 0,
+            width: blockSize * .5,
+            height: blockSize * .5,  // Personagem ocupa 2 blocos de altura
+            velocityX: 0,
+            velocityY: 0,
+            speed: 4,
+            jumpPower: 12,
+            grounded: false
+        };
+
+        let platforms = [];
+        let nuvens = [];
+        let obstacles = [];
+        let treasures = [];
+        let coins = [];
+
+        let keys = {};
+
+        window.addEventListener("keydown", (e) => keys[e.code] = true);
+        window.addEventListener("keyup", (e) => keys[e.code] = false);
+
+        // Função para detectar colisão entre dois objetos
+        function isColliding(a, b) {
+            return (
+                a.x < b.x + b.width &&
+                a.x + a.width > b.x &&
+                a.y < b.y + b.height &&
+                a.y + a.height > b.y
+            );
+        }
+
+        // Verifica e corrige colisão em todas as direções
+        function checkCollisions() {
+
+            player.grounded = false; // Assume que o personagem está no ar até confirmação
+
+            platforms.forEach(platform => {
+                if (isColliding(player, platform)) {
+                    let bottom = player.y + player.height;
+                    let top = player.y;
+                    let left = player.x;
+                    let right = player.x + player.width;
+
+                    let pBottom = platform.y + platform.height;
+                    let pTop = platform.y;
+                    let pLeft = platform.x;
+                    let pRight = platform.x + platform.width;
+
+                    let overlapX = Math.min(right, pRight) - Math.max(left, pLeft);
+                    let overlapY = Math.min(bottom, pBottom) - Math.max(top, pTop);
+
+                    if (overlapX < overlapY) {
+                        // Colisão lateral -> Bloqueia apenas movimento lateral
+                        if (player.velocityX > 0) {
+                            player.x = pLeft - player.width;
+                        } else if (player.velocityX < 0) {
+                            player.x = pRight;
+                        }
+                        player.velocityX = 0;
+                    } else {
+                        // Colisão vertical
+                        if (player.velocityY > 0) {
+                            // Colisão na parte inferior (pouso)
+                            if (bottom - pTop >= 0 && bottom - pTop <= Math.abs(player.velocityY) + 1) {
+                                player.y = pTop - player.height;
+                                player.velocityY = 0;
+                                player.grounded = true;
+                            }
+                        } else if (player.velocityY < 0) {
+                            // Colisão na parte superior (cabeça)
+                            if (pBottom - top >= 0 && pBottom - top <= Math.abs(player.velocityY) + 1) {
+                                console.log("pBottom:" + pBottom + "|pRight:" + pRight);
+                                player.y = pBottom; // Bateu a cabeça na plataforma
+                                player.velocityY = 0;
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Verifica se o jogador tocou um obstáculo "#"
+            obstacles.forEach(obstacle => {
+                if (isColliding(player, obstacle)) {
+                    gameOver(false); // Função que reinicia o jogo ao morrer
+                }
+            });
+
+            // Verifica se o jogador tocou uma moeda "0"
+            for (let i = coins.length - 1; i >= 0; i--) {
+                if (isColliding(player, coins[i])) {
+                    score += 10;
+                    coins.splice(i, 1); // Remove a moeda da lista
+                    // Você pode adicionar aqui a lógica para aumentar a pontuação, etc.
+                }
+            }
+
+            // Verifica se o jogador pegou o tesouro "$"
+            treasures.forEach((treasure, index) => {
+                if (isColliding(player, treasure)) {
+                    gameOver(true);
+                }
+            });
+        }
+
+        // Atualiza a posição do jogador (Corrigido: Teclas não ficam "presas" após reiniciar)
+        function update() {
+            if (gameIsRunning) {
+                if (keys["ArrowLeft"]) player.velocityX = -player.speed;
+                else if (keys["ArrowRight"]) player.velocityX = player.speed;
+                else player.velocityX = 0;
+
+                if (keys["ArrowUp"] && player.grounded) { // Alterado de "Space" para "ArrowUp"
+                    player.velocityY = -player.jumpPower;
+                    player.grounded = false;
+                }
+
+                if (player.velocityY < gravity * 25)
+                    player.velocityY += gravity;
+
+                player.x += player.velocityX;
+                player.y += player.velocityY;
+
+                checkCollisions();
+            }
+        }
+
+        // Reinicia o jogo (Corrigido: Limpa teclas pressionadas ao reiniciar)
+        function restartGame() {
+            keys = {}; // Limpa as teclas para evitar movimento automático
+            generateLevel(currentLevel.data);
+            faseImagemElement.src = 'imagens/' + currentLevel.image;
+            timer = 150;
+            iniciarContadorRegressivo();
+        }
+
+        // Renderiza o jogo
+        function draw() {
+            if (gameIsRunning) {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                // Desenha plataformas
+                platforms.forEach(platform => {
+                    ctx.fillStyle = platform.color;
+                    ctx.fillRect(platform.x, platform.y, platform.width, platform.height)
+                });
+
+                // Exibir o nome de fase
+                const nameText = `${currentLevel.name}`;
+                const leftX = 10;
+                ctx.fillStyle = "white";
+                ctx.font = "40px Arial Black Bold";
+                ctx.fillText(nameText, leftX, 40);
+
+                // Desenha nuvens
+                ctx.fillStyle = "#FCFCFC";
+                nuvens.forEach(platform => ctx.fillRect(platform.x, platform.y, platform.width, platform.height));
+
+                // Desenha obstáculos
+                ctx.fillStyle = "red";
+                obstacles.forEach(obstacle => ctx.fillRect(obstacle.x, obstacle.y, obstacle.width, obstacle.height));
+
+                // Desenha moedas
+                ctx.fillStyle = "yellow";
+                coins.forEach(coin => ctx.fillRect(coin.x, coin.y, coin.width, coin.height));
+
+                // Desenha tesouro
+                if (treasure) {
+                    ctx.fillStyle = "gold";
+                    ctx.fillRect(treasure.x, treasure.y, treasure.width, treasure.height);
+                }
+
+                // Desenha personagem (personagem palito)
+                ctx.fillStyle = "black";
+                ctx.fillRect(player.x, player.y, player.width, player.height);
+
+                // Exibir a pontuação
+                const scoreText = `${score}`;
+                const textWidth = ctx.measureText(scoreText).width;
+                const centerX = canvas.width / 2 - textWidth / 2;
+                ctx.fillStyle = "black";
+                ctx.font = "40px Courier New Bold";
+                ctx.fillText(scoreText, centerX, 40);
+            }
+        }
+
+        // Loop do jogo
+        function gameLoop() {
+            if (gameIsRunning) {
+                update();
+                draw();
+            }
+            requestAnimationFrame(gameLoop);
+        }
+
+        gameLoop();
+
+        // Contador regressivo
+        let countdownInterval;
+        function iniciarContadorRegressivo() {
+            clearInterval(countdownInterval); // Limpa qualquer intervalo anterior
+            timer = 150;
+            countdownInterval = setInterval(() => {
+                if (timer > 0) {
+                    if (gameIsRunning) {
+                        //score = Math.max(0, score - 1); // Subtrai 1 ponto, mas não deixa a pontuação ser negativa
+                        //timer--;
+                    }
+                } else {
+                    clearInterval(countdownInterval);
+                    alert("Tempo esgotado! Fim de jogo.");
+                    gameOver(false); // Considera tempo esgotado como derrota
+                }
+            }, 1000);
+        }
+
+        function gameOver(p_victory) {
+            let colors = p_victory ? ["#00FF00", "#FFFFFF"] : ["#FF0000", "#FFFFFF"];
+            let i = 0;
+
+            gameIsRunning = false;
+            player.velocityX = 0;
+            player.velocityY = 0;
+
+            let interval = setInterval(() => {
+                document.body.style.backgroundColor = colors[i % 2];
+                canvas.style.backgroundColor = colors[i % 2];
+                i++;
+                if (i > 5) {
+                    clearInterval(interval);
+                    document.body.style.backgroundColor = "#87CEEB";
+                    canvas.style.backgroundColor = "#5C94FC";
+                    //saveScore(score);
+                    alert(`Você conseguiu ${score} pontos!`);
+                    initializeMenu(); // Volta para o menu após o Game Over
+                }
+            }, 200);
+        }
+
+        function saveScore(finalScore) {
+            const playerName = prompt("Fim de jogo! Digite seu nome para o ranking:", "Jogador");
+            if (playerName !== null && playerName.trim() !== "") {
+                ranking.push({ name: playerName.trim(), score: finalScore });
+                ranking.sort((a, b) => b.score - a.score); // Ordena em ordem decrescente
+                ranking = ranking.slice(0, maxRankingSize); // Mantém apenas os 10 melhores
+                saveRankingToCookie();
+            }
+        }
+
+        function saveRankingToCookie() {
+            document.cookie = `gameRanking=${JSON.stringify(ranking)}; expires=Fri, 31 Dec 9999 23:59:59 GMT; path=/`;
+        }
+
+        function loadRankingFromCookie() {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                let cookie = cookies[i].trim();
+                if (cookie.startsWith('gameRanking=')) {
+                    try {
+                        ranking = JSON.parse(cookie.substring('gameRanking='.length, cookie.length));
+                    } catch (e) {
+                        console.error("Erro ao analisar o cookie do ranking:", e);
+                        ranking = []; // Se houver erro, inicializa com um ranking vazio
+                    }
+                    return;
+                }
+            }
+        }
+
+        function showRanking() {
+            if (ranking.length === 0) {
+                alert("O ranking ainda está vazio.");
+                return;
+            }
+            let rankingText = "--- Ranking ---\n";
+            ranking.forEach((entry, index) => {
+                rankingText += `${index + 1}. ${entry.name}: ${entry.score}\n`;
+            });
+            alert(rankingText);
+        }
+
+        const rankingIcon = document.getElementById('rankingIcon');
+        if (rankingIcon) {
+            rankingIcon.addEventListener('click', showRanking);
+        }
+
+        voltarButton.addEventListener('click', initializeMenu);
+
+        // Inicializa o menu de fases quando a página carrega
+        initializeMenu();
+    </script>
+
+</body>
+</html>
